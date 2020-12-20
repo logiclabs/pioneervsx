@@ -144,7 +144,9 @@ class PioneerDevice(MediaPlayerEntity):
             try:
                 telnet = telnetlib.Telnet(self._host, self._port, self._timeout)
             except (ConnectionRefusedError, OSError):
-                _LOGGER.debug("Pioneer %s refused connection", self._name
+                _LOGGER.debug("Pioneer %s refused connection", self._name)
+                self._pwstate = "DOWN"
+                telnet.close()
                 return
 
             self.telnet_wakeup(telnet)
@@ -235,6 +237,8 @@ class PioneerDevice(MediaPlayerEntity):
             telnet = telnetlib.Telnet(self._host, self._port, self._timeout)
         except (ConnectionRefusedError, OSError):
             _LOGGER.debug("Pioneer %s refused connection", self._name)
+            self._pwstate = "DOWN"
+            telnet.close()
             return False
 
         self.telnet_wakeup(telnet)
@@ -259,6 +263,8 @@ class PioneerDevice(MediaPlayerEntity):
     @property
     def state(self):
         """Return the state of the device."""
+        if self._pwstate == "DOWN":
+            return STATE_OFF
         if self._pwstate == "PWR2":
             return STATE_OFF
         if self._pwstate == "PWR1":
@@ -320,6 +326,7 @@ class PioneerDevice(MediaPlayerEntity):
     def turn_off(self):
         """Turn off media player."""
         self.telnet_command("PF", "PWR")
+        self._pwstate = "DOWN"
 
     def volume_up(self):
         """Volume up media player."""
