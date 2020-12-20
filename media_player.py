@@ -9,6 +9,7 @@ from homeassistant.components.media_player.const import (
     SUPPORT_PAUSE,
     SUPPORT_PLAY,
     SUPPORT_SELECT_SOURCE,
+    SUPPORT_SELECT_SOUND_MODE,
     SUPPORT_TURN_OFF,
     SUPPORT_TURN_ON,
     SUPPORT_VOLUME_MUTE,
@@ -38,6 +39,8 @@ DEFAULT_ENABLED_SOURCES_ONLY = True
 DEFAULT_DISABLED_SOURCES = []
 DEFAULT_SOURCES = {}
 
+SOUND_MODE_LIST = ["OFF", "A ON", "B ON", "A+B ON"]
+
 SUPPORT_PIONEER = (
     SUPPORT_PAUSE
     | SUPPORT_VOLUME_SET
@@ -46,6 +49,7 @@ SUPPORT_PIONEER = (
     | SUPPORT_TURN_ON
     | SUPPORT_TURN_OFF
     | SUPPORT_SELECT_SOURCE
+    | SUPPORT_SELECT_SOUND_MODE
     | SUPPORT_PLAY
 )
 
@@ -99,6 +103,8 @@ class PioneerDevice(MediaPlayerEntity):
         self._selected_source = ""
         self._source_name_to_number = sources
         self._source_number_to_name = {v: k for k, v in sources.items()}
+        self._sound_mode_list = SOUND_MODE_LIST
+        self._sound_mode = None
 
     @classmethod
     def telnet_request(cls, telnet, command, expected_prefix):
@@ -138,7 +144,7 @@ class PioneerDevice(MediaPlayerEntity):
             try:
                 telnet = telnetlib.Telnet(self._host, self._port, self._timeout)
             except (ConnectionRefusedError, OSError):
-                _LOGGER.debug("Pioneer %s refused connection", self._name)
+                _LOGGER.debug("Pioneer %s refused connection", self._name
                 return
 
             self.telnet_wakeup(telnet)
@@ -170,7 +176,8 @@ class PioneerDevice(MediaPlayerEntity):
             "PWR": self.setPower,
             "VOL": self.setVolume,
             "MUT": self.setMute,
-            "FN": self.setSource
+            "FN": self.setSource,
+            "SPK": self.setSoundMode
         }
         # Get the function from switcher dictionary
         responseAction = switcher.get(prefix, None)
@@ -216,6 +223,12 @@ class PioneerDevice(MediaPlayerEntity):
         else:
             self._selected_source = None
 
+    def setSoundMode(self, response):
+        if response:
+            self._sound_mode = self._sound_mode_list[int(response[3:])]
+        else:
+            self._sound_mode = None
+
     def update(self):
         """Get the latest details from the device."""
         try:
@@ -233,6 +246,7 @@ class PioneerDevice(MediaPlayerEntity):
         self.processRequest(telnet,"?V", "VOL")
         self.processRequest(telnet,"?M", "MUT")
         self.processRequest(telnet,"?F", "FN")
+        self.processRequest(telnet,"?SPK","SPK")
 
         telnet.close()
         return True
@@ -289,6 +303,16 @@ class PioneerDevice(MediaPlayerEntity):
         return list(self._source_name_to_number.keys())
 
     @property
+    def sound_mode(self):
+        """Name of the current sound mode."""
+        return self._sound_mode
+
+    @property
+    def sound_mode_list(self):
+        """List of available sound modes."""
+        return self._sound_mode_list
+
+    @property
     def media_title(self):
         """Title of current playing media."""
         return self._selected_source
@@ -324,3 +348,10 @@ class PioneerDevice(MediaPlayerEntity):
             self.telnet_command(self._source_name_to_number.get(source) + "FN", "FN")
         else:
             _LOGGER.error("Unknown input '%s'", source)
+
+    def select_sound_mode(self, sound_mode):
+        """Select sound mode."""
+        if sound_mode in self._sound_mode_list:
+            self.telnet_command(str(self._sound_mode_list.index(sound_mode)) + "SPK", "SPK")
+        else:
+            _LOGGER.error("Unknown sound mode '%s'", source)
