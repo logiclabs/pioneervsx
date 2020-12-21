@@ -146,7 +146,6 @@ class PioneerDevice(MediaPlayerEntity):
             except (ConnectionRefusedError, OSError):
                 _LOGGER.debug("Pioneer %s refused connection", self._name)
                 self._pwstate = "DOWN"
-                telnet.close()
                 return
 
             self.telnet_wakeup(telnet)
@@ -234,26 +233,30 @@ class PioneerDevice(MediaPlayerEntity):
     def update(self):
         """Get the latest details from the device."""
         try:
-            telnet = telnetlib.Telnet(self._host, self._port, self._timeout)
-        except (ConnectionRefusedError, OSError):
-            _LOGGER.debug("Pioneer %s refused connection", self._name)
-            self._pwstate = "DOWN"
+            try:
+                telnet = telnetlib.Telnet(self._host, self._port, self._timeout)
+            except (ConnectionRefusedError, OSError):
+                _LOGGER.debug("Pioneer %s refused connection", self._name)
+                self._pwstate = "DOWN"
+                return False
+
+            self.telnet_wakeup(telnet)
+
+            # Build the source name dictionaries if necessary
+            self.buildSourceMap(telnet)   
+
+            self.processRequest(telnet,"?P", "PWR")
+            self.processRequest(telnet,"?V", "VOL")
+            self.processRequest(telnet,"?M", "MUT")
+            self.processRequest(telnet,"?F", "FN")
+            self.processRequest(telnet,"?SPK","SPK")
+
             telnet.close()
+            return True
+        except (EOFError):
+            _LOGGER.debug("Pioneer %s connection closed", self._name)
+            self._pwstate = "DOWN"
             return False
-
-        self.telnet_wakeup(telnet)
-
-        # Build the source name dictionaries if necessary
-        self.buildSourceMap(telnet)   
-
-        self.processRequest(telnet,"?P", "PWR")
-        self.processRequest(telnet,"?V", "VOL")
-        self.processRequest(telnet,"?M", "MUT")
-        self.processRequest(telnet,"?F", "FN")
-        self.processRequest(telnet,"?SPK","SPK")
-
-        telnet.close()
-        return True
 
     @property
     def name(self):
