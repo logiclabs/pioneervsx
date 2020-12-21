@@ -81,8 +81,8 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
         config[CONF_SOURCES],
     )
 
-    if pioneer.update():
-        add_entities([pioneer])
+    # Add entity and update before adding
+    add_entities([pioneer], True)
 
 
 class PioneerDevice(MediaPlayerEntity):
